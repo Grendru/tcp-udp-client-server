@@ -5,15 +5,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <fstream>
 #include <iostream>
 #include <sys/poll.h>
 #include <string.h>
 #include <getopt.h>
 #include <iomanip>
-
+#include <signal.h>
 
 using namespace std;
+
+volatile sig_atomic_t exit_from_user = 0;
+void interrupt(int sig)
+{
+    exit_from_user = 1;
+}
 
 class Client
 {
@@ -24,10 +29,10 @@ public:
     }
     int send_data(string data)
     {
+        size_t len = data.size() + 1;
+        int ret;
         if (protocol == "tcp")
         {
-            size_t len = data.size();
-            int ret;
             if (send(sock, &len, sizeof(size_t), 0) == -1)
             {
                 perror("send");
@@ -35,15 +40,12 @@ public:
             }
             if ((ret = send(sock, data.c_str(), len, 0)) < 0)
             {
-                cout << "ret: " << ret;
                 perror("send");
                 exit(1);
             }
         }
         else if (protocol == "udp")
         {
-            size_t len = data.size();
-            int ret;
             if (sendto(sock, &len, sizeof(size_t), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
             {
                 perror("sendto");
@@ -51,7 +53,6 @@ public:
             }
             if ((ret = sendto(sock, data.c_str(), len, 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in))) < 0)
             {
-                cout << "ret: " << ret;
                 perror("sendto");
                 exit(1);
             }
@@ -116,6 +117,7 @@ private:
     string protocol;
     struct sockaddr_in addr;
 };
+
 void usage(char *name)
 {
     cout << "usage: " << name << endl;    
@@ -126,6 +128,7 @@ void usage(char *name)
     cout << "example: " << name << " --ip=127.0.0.1 --port=4040 -t" << endl;    
     return;
 }
+
 int get_parameters(int argc, char* argv[], string &ip,int &port, string &mode)
 {
     int c;
@@ -180,6 +183,7 @@ int get_parameters(int argc, char* argv[], string &ip,int &port, string &mode)
     }
     return 0;
 }
+
 int main(int argc, char* argv[])
 {
     string ip_str, mode;
@@ -207,9 +211,9 @@ int main(int argc, char* argv[])
         return -1;
     }
     Client client(ip, port, mode);
-    while(1) 
+    signal(SIGINT, interrupt);
+    while(!exit_from_user) 
     {
-
         string data;
         getline(cin, data);
         client.send_data(data);

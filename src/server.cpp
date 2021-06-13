@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
- #include <unistd.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -8,14 +8,12 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <sys/poll.h>
-#include <fstream>  
-#include <wait.h>
 #include <getopt.h>
 #include <iomanip>
 #include <iostream>
-#include <list>
 #include <algorithm>
 #include <regex>
+#include <signal.h>
 
 #define MAX_CLIENTS 128
 
@@ -31,6 +29,7 @@ public:
     }
     int listening()
     {
+        signal(SIGINT, Server::interrupt);
         struct pollfd fd[MAX_CLIENTS + 2];
         int numclients = 0; 
         fd[0].fd = tcp_sock;
@@ -41,29 +40,29 @@ public:
         {
             fd[i].fd = -1;
         }
-        while(1)
+        while(!exit_from_user)
         {
             int ret = poll( fd, numclients + 2, -1 );
-            if ( ret == -1 )
-                {
-                    cout << "Error: poll" << endl;
-                    break;
-                }
+            if ( ret < 0 )
+            {
+                if (!exit_from_user) cout << "Error: poll" << endl;
+                break;
+            }
             else if ( ret == 0 )
-                {
-                    cout << "Time out" << endl;
-                    break;
-                }
+            {
+                cout << "Time out" << endl;
+                break;
+            }
             else
             {
                 if ( fd[0].revents & POLLIN )
-                    add_tcp_socket(fd, numclients, ret);
+                    add_tcp_socket(fd, numclients);
                 if ( fd[1].revents & POLLIN )
                 {
                     struct sockaddr_in addr;
-                    char* data = read_data(fd[1].fd, 'u', addr);
+                    char* data = read_data(fd[1].fd, "udp", addr);
                     string tmp = prepare_data(data);
-                    send_data(0, tmp,"udp",(sockaddr&) addr);
+                    send_data(0, tmp, "udp",(sockaddr&) addr);
                     delete[] data;
                 }
                 for (int i = 2; i <= numclients; i++)
@@ -79,7 +78,7 @@ public:
                     else if(fd[i].revents & POLLIN)
                     {
                         struct sockaddr_in addr;
-                        char *data = read_data(fd[i].fd, 't', addr);
+                        char *data = read_data(fd[i].fd, "tcp", addr);
                         if (data == nullptr)
                         {
                             fd[i].revents = 0;
@@ -88,7 +87,7 @@ public:
                             continue;
                         }
                         string tmp = prepare_data(data);
-                        send_data(fd[i].fd, tmp,"tcp",(sockaddr&) addr);
+                        send_data(fd[i].fd, tmp, "tcp",(sockaddr&) addr);
                         delete[] data;
                     }
                 }
@@ -96,6 +95,10 @@ public:
             }
         }
         return 1;
+    }
+    static void interrupt(int sig)
+    {
+        exit_from_user = 1;
     }
     static bool comp(string first, string second)
     {
@@ -106,6 +109,8 @@ public:
         close(tcp_sock);
         close(udp_sock);
     }
+    
+
 private:
     int get_listen_sock(int port, string mode)
     {
@@ -133,7 +138,7 @@ private:
 
         return listener;
     }
-    int add_tcp_socket(struct pollfd* fd, int& numclients, int& ret)
+    int add_tcp_socket(struct pollfd* fd, int& numclients)
     {
         fd[0].revents = 0;
         int sock = accept(fd[0].fd, NULL, NULL);
@@ -156,8 +161,6 @@ private:
             return 0;
         if (i > numclients)
             numclients = i;
-        if (--ret <= 0)
-            return 0;
         return 1;
     }
     int send_data(int socket, string data, string protocol, struct sockaddr& addr)
@@ -173,7 +176,6 @@ private:
             }
             if ((ret = send(socket, data.c_str(), len, 0)) < 0)
             {
-                cout << "ret: " << ret;
                 perror("send");
                 exit(1);
             }
@@ -187,17 +189,16 @@ private:
             }
             if ((ret = sendto(udp_sock, data.c_str(), len, 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in))) < 0)
             {
-                cout << "ret: " << ret;
                 perror("sendto");
                 exit(1);
             }
         }
         return 1;
     }
-    char * read_data(int socket, char mode, struct sockaddr_in& addr)
+    char * read_data(int socket, string mode, struct sockaddr_in& addr)
     {
         size_t datalen;
-        if (mode =='t')
+        if (mode == "tcp")
         {
             int ret = recv(socket, &datalen, sizeof(size_t), 0);
             if (ret > 0)
@@ -207,7 +208,7 @@ private:
                 return data;
             }
         }
-        else if (mode == 'u')
+        else if (mode == "udp")
         {
             socklen_t addrlen = sizeof(addr);
             int received = recvfrom(socket, &datalen, sizeof(size_t), 0, (struct sockaddr*) &addr, &addrlen);
@@ -222,8 +223,7 @@ private:
     } 
     bool isNumber(string s)
     {
-        if (s[0] != '-' && (s[0] < '0' || s[0] > '9'))  return false;
-        for (int a = 1; a < s.length(); a++)
+        for (int a = 0; a < s.length(); a++)
         {
             
             if ((s[a] < 48) || (s[a] > 57))  return false;
@@ -233,7 +233,7 @@ private:
     }
     string prepare_data(string data)
     {
-        data = regex_replace(data, regex("[^0-9a-z_-]"), " ");
+        data = regex_replace(data, regex("[^0-9a-z_]"), " ");
         vector<std::string> words;
         istringstream ist(data);
         string tmp;
@@ -254,6 +254,7 @@ private:
         return tmp;
     }
     int tcp_sock, udp_sock;
+    static volatile sig_atomic_t exit_from_user;
 };
 void usage(char *name)
 {
@@ -293,6 +294,8 @@ int get_parameters(int argc, char* argv[], int &port)
     }
     return 0;
 }
+
+volatile sig_atomic_t Server::exit_from_user = 0;
 
 int main(int argc, char *argv[])
 {
