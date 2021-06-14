@@ -29,7 +29,7 @@ public:
     }
     int listening()
     {
-        signal(SIGINT, Server::interrupt);
+        signal(SIGINT, Server::interrupt);    // обработка сигнала Ctrl+v
         struct pollfd fd[MAX_CLIENTS + 2];
         int numclients = 0; 
         fd[0].fd = tcp_sock;
@@ -55,9 +55,9 @@ public:
             }
             else
             {
-                if ( fd[0].revents & POLLIN )
+                if ( fd[0].revents & POLLIN )     // новое подключение по tcp
                     add_tcp_socket(fd, numclients);
-                if ( fd[1].revents & POLLIN )
+                if ( fd[1].revents & POLLIN )     // новое подключение по udp
                 {
                     struct sockaddr_in addr;
                     char* data = read_data(fd[1].fd, "udp", addr);
@@ -69,7 +69,7 @@ public:
                 {
                     if (fd[i].fd < 0)
                         continue;
-                    if(fd[i].revents & POLLHUP)
+                    if(fd[i].revents & POLLHUP)    // получен сигнал об отключении клиента
                     {
                         fd[i].revents = 0;
                         close(fd[i].fd);
@@ -148,7 +148,7 @@ private:
             exit(3);
         }
         int i;
-        for(i = 1; i < MAX_CLIENTS; i++)
+        for(i = 1; i < MAX_CLIENTS + 2; i++)
         {
             if(fd[i].fd < 0)
             {
@@ -157,7 +157,7 @@ private:
                 break;
             }
         }
-        if(i == MAX_CLIENTS)
+        if(i == MAX_CLIENTS + 2)
             return 0;
         if (i > numclients)
             numclients = i;
@@ -195,7 +195,7 @@ private:
         }
         return 1;
     }
-    char * read_data(int socket, string mode, struct sockaddr_in& addr)
+    char* read_data(int socket, string mode, struct sockaddr_in& addr)
     {
         size_t datalen;
         if (mode == "tcp")
@@ -224,16 +224,14 @@ private:
     bool isNumber(string s)
     {
         for (int a = 0; a < s.length(); a++)
-        {
-            
-            if ((s[a] < 48) || (s[a] > 57))  return false;
-            
+        {            
+            if ((s[a] < 48) || (s[a] > 57))  return false;   
         }
         return true;
     }
-    string prepare_data(string data)
+    string prepare_data(string data)  // извлечение чисел из строки и подсчет их суммы
     {
-        data = regex_replace(data, regex("[^0-9a-z_]"), " ");
+        data = regex_replace(data, regex("[^0-9a-z_]"), " ");  // исключаем незначащие знаки
         vector<std::string> words;
         istringstream ist(data);
         string tmp;
@@ -256,7 +254,7 @@ private:
     int tcp_sock, udp_sock;
     static volatile sig_atomic_t exit_from_user;
 };
-void usage(char *name)
+void usage(char* name)
 {
     cout << "usage: " << name << endl;    
     cout << setw(60) << left << "  -h, --help " << "to this message" << endl;     

@@ -154,8 +154,7 @@ int get_parameters(int argc, char* argv[], string &ip,int &port, string &mode)
                     return 1;
                 }
                 mode = "tcp";
-                continue;
-            
+                continue;            
             case 'u':
                 if (mode == "tcp")
                 {
@@ -163,16 +162,13 @@ int get_parameters(int argc, char* argv[], string &ip,int &port, string &mode)
                     return 1;
                 }
                 mode = "udp";
-                continue;
-                
+                continue;                
             case 'i':
                 ip = optarg;
-                continue;
-                
+                continue;                
             case 'p':
                 port = atoi(optarg);
                 continue;
-            
             case 'h':
                 usage(argv[0]);
                 continue;
@@ -188,6 +184,7 @@ int main(int argc, char* argv[])
 {
     string ip_str, mode;
     int ip = -1, port = -1;
+
     if (argc == 1)
     {
         usage(argv[0]);
@@ -210,8 +207,9 @@ int main(int argc, char* argv[])
         cout << "Invalid protocol" << endl;
         return -1;
     }
+
     Client client(ip, port, mode);
-    signal(SIGINT, interrupt);
+    signal(SIGINT, interrupt);       //обработка сигнала прерывания Ctrl+C
     while(!exit_from_user) 
     {
         string data;
