@@ -94,6 +94,13 @@ public:
 
             }
         }
+        for(int i = 2; i < MAX_CLIENTS + 2; i++)
+        {
+            if(fd[i].fd > 0)
+            {
+                close(fd[i].fd);
+            }
+        }
         return 1;
     }
     static void interrupt(int sig)
@@ -148,7 +155,7 @@ private:
             exit(3);
         }
         int i;
-        for(i = 1; i < MAX_CLIENTS + 2; i++)
+        for(i = 2; i < MAX_CLIENTS + 2; i++)
         {
             if(fd[i].fd < 0)
             {
